@@ -1,0 +1,1 @@
+cmd_/home/x240/code/mmap/mmap.ko := ld -r -m elf_i386 -T /usr/src/linux-headers-3.13.0-32-generic/scripts/module-common.lds --build-id  -o /home/x240/code/mmap/mmap.ko /home/x240/code/mmap/mmap.o /home/x240/code/mmap/mmap.mod.o

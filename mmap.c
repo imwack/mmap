@@ -73,6 +73,7 @@ static int __init init(void)
         {
                  SetPageReserved(virt_to_page(kernel_memaddr));
                  kernel_memsize = PAGES_NUMBER * PAGE_SIZE;
+                 memset((void *)kernel_memaddr,'0',4096);
                  printk("Allocate memory success!. The phy mem addr=%08lx, size=%lu\n", __pa(kernel_memaddr), kernel_memsize);
         }
         return 0;
@@ -91,5 +92,5 @@ static void __exit fini(void)
 module_init(init);
 module_exit(fini);
 MODULE_LICENSE("GPL");
-MOUDLE_AUTHOR("wack");
+MODULE_AUTHOR("wack");
 MODULE_DESCRIPTION("Kernel memory share module.");

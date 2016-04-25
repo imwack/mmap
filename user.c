@@ -10,16 +10,10 @@
 
 int main(int argc, char* argv[])
 {
-    char * str ;
-        if(argc != 2)
-        {
-                printf("Usage: %s string\n", argv[0]);
-                return 0;
-        }
 
         unsigned long phymem_addr, phymem_size;
         char *map_addr;
-        char s[256];
+        char s[4096];
         int fd;
 
         /*get the physical address & size of allocated memory in kernel*/
@@ -50,14 +44,14 @@ int main(int argc, char* argv[])
             return -1;
          }
          else{
-            printf("mmap: %s \n",map_addr);
-            printf("addr: %p \n",map_addr);
-            printf("addr: %d \n",*map_addr);
+            //printf("mmap: %s \n",map_addr);
+            //printf("addr: %p \n",map_addr);
+            //printf("addr: %d \n",*map_addr);
         }
         //memcpy(map_addr, argv[1],sizeof(argv));
-        strcpy(map_addr,argv[1]);
-        memcpy(str,map_addr,256);
-        printf("str is :%s \n",str);
+        printf("map addr :%s\n",map_addr);
+        memcpy(s,map_addr,4096);
+        printf("str is :%s \n",s);
         int ret = munmap(map_addr, phymem_size);
         if(ret)
         {
