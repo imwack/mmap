@@ -14,10 +14,10 @@ int main(int argc, char* argv[])
         unsigned long phymem_addr, phymem_size;
         char *map_addr;
         char s[4096];
-        int fd;
+        int fd,map_fd,i,len,count;
 
         /*get the physical address & size of allocated memory in kernel*/
-         fd = open("/proc/memshare/phymem_info", O_RDONLY);
+        fd = open("/proc/memshare/phymem_info", O_RDONLY);
         if(fd < 0)
         {
                 printf("cannot open file /proc/memshare/phymem_info\n");
@@ -26,10 +26,22 @@ int main(int argc, char* argv[])
         read(fd, s, sizeof(s));
         sscanf(s, "%lx %lu", &phymem_addr,&phymem_size);
         close(fd);
-
         printf("phymem_addr=%lx, phymem_size=%lu\n", phymem_addr, phymem_size);
+        
+		/*get dump info*/
+		fd = open("/proc/memshare/dump_info", O_RDONLY);
+        if(fd < 0)
+        {
+                printf("cannot open file /proc/memshare/dump_info\n");
+                return 0;
+        }
+        read(fd, s, sizeof(s));
+        sscanf(s, "%d\n", &count);
+        close(fd);
+        printf("packet count=%d\n",  count);
+               
         /*memory map*/
-        int map_fd = open("/proc/memshare/mmap",  O_RDWR|O_SYNC);
+        map_fd = open("/proc/memshare/mmap",  O_RDWR|O_SYNC);
         if(map_fd < 0)
         {
                 printf("cannot open file /proc/memshare/mmap\n");
@@ -43,11 +55,6 @@ int main(int argc, char* argv[])
             close(map_fd);
             return -1;
          }
-         else{
-            //printf("mmap: %s \n",map_addr);
-            //printf("addr: %p \n",map_addr);
-            //printf("addr: %d \n",*map_addr);
-        }
         //memcpy(map_addr, argv[1],sizeof(argv));
         printf("map addr :%s\n",map_addr);
         memcpy(s,map_addr,4096);

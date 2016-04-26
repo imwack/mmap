@@ -33,9 +33,9 @@
 #include <linux/proc_fs.h>
 
 /*alloc one page. 4096 bytes*/
-#define PAGE_ORDER 0
+#define PAGE_ORDER 4
 /*this value can get from PAGE_ORDER*/
-#define PAGES_NUMBER 1
+#define PAGES_NUMBER 4
 static int DUMP_PCAP = 1;
 
 struct proc_dir_entry *proc_memshare_dir ;
@@ -47,12 +47,32 @@ int count = 0;
 
 #define PROC_MEMSHARE_DIR "memshare"
 #define PROC_MEMSHARE_INFO "phymem_info"
+#define PROC_DUMP_INFO "dump_info"
 #define PROC_MMAP_FILE "mmap"
 
 static struct nf_hook_ops nfho_in;
 static struct nf_hook_ops nfho_out;
 
-int proc_mmap(struct file *filp, struct vm_area_struct *vma)
+static int proc_show_meminfo(struct seq_file *m, void *v) {
+	printk("proc_show_meminfo called...\n");
+	seq_printf(m, "%08lx %lu\n",__pa(memaddr), memsize);
+	return 0;
+}
+
+static int proc_open_meminfo(struct inode *inode, struct  file *file) {
+	printk("proc_open_meminfo called...\n");
+	return single_open(file, proc_show_meminfo, NULL);
+}
+
+static const struct file_operations read_phymem_info_fops = { 
+    .owner = THIS_MODULE, 
+    .open = proc_open_meminfo, 
+    .read = seq_read, 
+    .llseek = seq_lseek, 
+    .release = seq_release 
+}; 
+
+int proc_mmap(struct file *file, struct vm_area_struct *vma)
 {
     unsigned long page;
     page = virt_to_phys((void *)memaddr) >> PAGE_SHIFT;
@@ -68,23 +88,24 @@ int proc_mmap(struct file *filp, struct vm_area_struct *vma)
     return 0;
 }
 
-static int proc_show_meminfo(struct seq_file *m, void *v) {
-  seq_printf(m, "%08lx %lu\n",__pa(memaddr), memsize);
-  return 0;
+static int proc_show_dumpinfo(struct seq_file *m, void *v) {
+	printk("proc_show_dumpinfo called...\n");
+	seq_printf(m, "%d\n",count );
+	return 0;
+}
+static size_t proc_dumpinfo_open(struct inode *inode, struct  file *file) 
+{
+		printk("proc_mmap_open called...\n");
+		return single_open(file, proc_show_dumpinfo, NULL);
 }
 
-static int proc_open_meminfo(struct inode *inode, struct  file *file) {
-  return single_open(file, proc_show_meminfo, NULL);
-}
-
-static const struct file_operations read_phymem_info_fops = { 
+static const struct file_operations read_dumpmem_info_fops = { 
     .owner = THIS_MODULE, 
-    .open = proc_open_meminfo, 
+    .open = proc_dumpinfo_open, 
     .read = seq_read, 
     .llseek = seq_lseek, 
     .release = seq_release 
 }; 
-
 static const struct file_operations proc_mmap_fops = { 
     .owner = THIS_MODULE, 
     .mmap = proc_mmap
@@ -99,6 +120,8 @@ int kks_proc_init(void)
 			return -1;
          if(!proc_create_data(PROC_MMAP_FILE, 0, proc_memshare_dir, &proc_mmap_fops,NULL))
 			return -1;
+		 if(!proc_create_data(PROC_DUMP_INFO, 0, proc_memshare_dir, &read_dumpmem_info_fops,NULL))
+			return -1;
 		return 0;
 }
 
@@ -106,6 +129,7 @@ void kks_proc_uninit(void)
 {
 		 remove_proc_entry(PROC_MMAP_FILE, proc_memshare_dir);
 		 remove_proc_entry(PROC_MEMSHARE_INFO, proc_memshare_dir);
+		 remove_proc_entry(PROC_DUMP_INFO, proc_memshare_dir);
          remove_proc_entry(PROC_MEMSHARE_DIR, NULL);
 }
 
@@ -120,7 +144,7 @@ int CopyToSharedMem(struct sk_buff *skb)
 		DataLen = htons(ih->tot_len) + ETH_HLEN;
 		if(free_size < DataLen)
 		{
-			printk("Do not have enough memory\n");
+			printk("Do not have enough memory,Stop dump pcap...\n");
 			DUMP_PCAP = 0;
 			return -1;
 		}
@@ -206,7 +230,7 @@ static int __init init(void)
                  SetPageReserved(virt_to_page(memaddr));
                  memsize = PAGES_NUMBER * PAGE_SIZE;
                  free_size = memsize;
-                 memset((void *)memaddr,0,4096);
+                 memset((void *)memaddr,0,memsize);
                  printk("Allocate memory success!. The phy mem addr=%08lx, size=%lu\n", __pa(memaddr), memsize);
         }
         
@@ -216,7 +240,7 @@ static int __init init(void)
 
 static void __exit fini(void)
 {
-         printk("The content written by user is: %s\n", (unsigned char *) memaddr);
+         //printk("The content written by user is: %s\n", (unsigned char *) memaddr);
          ClearPageReserved(virt_to_page(memaddr));
          free_pages(memaddr, PAGE_ORDER);
          kks_proc_uninit();

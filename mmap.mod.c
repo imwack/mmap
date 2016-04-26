@@ -30,10 +30,10 @@ __attribute__((section("__versions"))) = {
 	{ 0x945e4c08, __VMLINUX_SYMBOL_STR(remove_proc_entry) },
 	{ 0x99c316ce, __VMLINUX_SYMBOL_STR(proc_create_data) },
 	{ 0x3bcc8c0, __VMLINUX_SYMBOL_STR(proc_mkdir) },
-	{ 0x50eedeb8, __VMLINUX_SYMBOL_STR(printk) },
 	{ 0x7105e20d, __VMLINUX_SYMBOL_STR(remap_pfn_range) },
 	{ 0xfd485ec8, __VMLINUX_SYMBOL_STR(seq_printf) },
 	{ 0x990395ac, __VMLINUX_SYMBOL_STR(single_open) },
+	{ 0x50eedeb8, __VMLINUX_SYMBOL_STR(printk) },
 	{ 0xb4390f9a, __VMLINUX_SYMBOL_STR(mcount) },
 };
 
@@ -43,4 +43,4 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "3667C5FF75C0D2C6653F28A");
+MODULE_INFO(srcversion, "865E0EA1E9BD855FE261B29");
