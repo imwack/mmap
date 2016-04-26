@@ -40,22 +40,29 @@ static int DUMP_PCAP = 1;
 
 struct proc_dir_entry *proc_memshare_dir ;
 unsigned long memaddr = 0;
+unsigned long memaddr1 = 0;
 unsigned long memsize= 0;
+
+int currentfile = 0;
 int offset = 0;
+int offset1 = 0;
 int free_size;
+int free_size1;
 int count = 0;
+int count1 = 0;
 
 #define PROC_MEMSHARE_DIR "memshare"
 #define PROC_MEMSHARE_INFO "phymem_info"
 #define PROC_DUMP_INFO "dump_info"
 #define PROC_MMAP_FILE "mmap"
+#define PROC_MMAP_FILE1 "mmap1"
 
 static struct nf_hook_ops nfho_in;
 static struct nf_hook_ops nfho_out;
 
 static int proc_show_meminfo(struct seq_file *m, void *v) {
 	printk("proc_show_meminfo called...\n");
-	seq_printf(m, "%08lx %lu\n",__pa(memaddr), memsize);
+	seq_printf(m, "%08lx %lu %08lx\n",__pa(memaddr), memsize,__pa(memaddr1));
 	return 0;
 }
 
@@ -87,15 +94,29 @@ int proc_mmap(struct file *file, struct vm_area_struct *vma)
     printk("remap_pfn_rang page:[%lu] ok.\n", page);
     return 0;
 }
+int proc_mmap1(struct file *file, struct vm_area_struct *vma)
+{
+    unsigned long page;
+    page = virt_to_phys((void *)memaddr1) >> PAGE_SHIFT;
 
+    if( remap_pfn_range(vma, vma->vm_start, page, (vma->vm_end - vma->vm_start), 
+         vma->vm_page_prot) )
+    {
+        printk("remap failed...");
+        return -1;
+    }
+    vma->vm_flags |= (VM_DONTDUMP|VM_DONTEXPAND);
+    printk("remap_pfn_rang page:[%lu] ok.\n", page);
+    return 0;
+}
 static int proc_show_dumpinfo(struct seq_file *m, void *v) {
 	printk("proc_show_dumpinfo called...\n");
-	seq_printf(m, "%d\n",count );
+	seq_printf(m, "%d %d\n",currentfile,currentfile?count1:count);
 	return 0;
 }
 static size_t proc_dumpinfo_open(struct inode *inode, struct  file *file) 
 {
-		printk("proc_mmap_open called...\n");
+		//printk("proc_mmap_open called...\n");
 		return single_open(file, proc_show_dumpinfo, NULL);
 }
 
@@ -110,6 +131,10 @@ static const struct file_operations proc_mmap_fops = {
     .owner = THIS_MODULE, 
     .mmap = proc_mmap
 }; 
+static const struct file_operations proc_mmap_fops1 = { 
+    .owner = THIS_MODULE, 
+    .mmap = proc_mmap1
+}; 
 
 int kks_proc_init(void)
 {
@@ -120,6 +145,8 @@ int kks_proc_init(void)
 			return -1;
          if(!proc_create_data(PROC_MMAP_FILE, 0, proc_memshare_dir, &proc_mmap_fops,NULL))
 			return -1;
+		 if(!proc_create_data(PROC_MMAP_FILE1, 0, proc_memshare_dir, &proc_mmap_fops1,NULL))
+			return -1;
 		 if(!proc_create_data(PROC_DUMP_INFO, 0, proc_memshare_dir, &read_dumpmem_info_fops,NULL))
 			return -1;
 		return 0;
@@ -128,6 +155,7 @@ int kks_proc_init(void)
 void kks_proc_uninit(void)
 {
 		 remove_proc_entry(PROC_MMAP_FILE, proc_memshare_dir);
+		 remove_proc_entry(PROC_MMAP_FILE1, proc_memshare_dir);
 		 remove_proc_entry(PROC_MEMSHARE_INFO, proc_memshare_dir);
 		 remove_proc_entry(PROC_DUMP_INFO, proc_memshare_dir);
          remove_proc_entry(PROC_MEMSHARE_DIR, NULL);
@@ -142,18 +170,45 @@ int CopyToSharedMem(struct sk_buff *skb)
 		ih = ip_hdr(skb);
 		data = (char *)((char *)ih - ETH_HLEN);
 		DataLen = htons(ih->tot_len) + ETH_HLEN;
-		if(free_size < DataLen)
-		{
-			printk("Do not have enough memory,Stop dump pcap...\n");
-			DUMP_PCAP = 0;
-			return -1;
+		if(currentfile == 0)		//write file 0
+		{	
+				if(free_size < DataLen)
+				{
+						printk("File0 do not have enough memory...\n");
+						currentfile = 1;
+						offset1 = 0;
+						count1 = 0;
+						free_size1 = memsize;
+						goto file1;
+				}
+				else
+				{
+						memcpy((void *)(memaddr + offset), data, DataLen);
+						offset += DataLen;
+						free_size -= DataLen;
+						count++;
+						printk("Packet[%d] Copy to shared memory0,DataLen%d ,memory0 left :%d: \n",count,DataLen,free_size);
+						return 0;
+				}
 		}
-		
-		memcpy((void *)(memaddr + offset), data, DataLen);
-		offset += DataLen;
-		free_size -= DataLen;
-		count++;
-		printk("Packet[%d] Copy to shared memory,DataLen%d ,memory left :%d: \n",count,DataLen,free_size);
+
+file1:			//write file 1
+		if(free_size1 < DataLen)
+		{
+			printk("File1do not have enough memory...\n");
+			currentfile = 0;
+			offset = 0;
+			count = 0;
+			free_size = memsize;
+		}
+		else
+		{
+			memcpy((void *)(memaddr1 + offset1), data, DataLen);
+			offset1 += DataLen;
+			free_size1 -= DataLen;
+			count1++;
+			printk("Packet[%d] Copy to shared memory,DataLen%d ,memory left :%d: \n",count1,DataLen,free_size1);
+		}
 		return 0;
 }
 
@@ -219,8 +274,9 @@ static int __init init(void)
 		}
 
         /*alloc one page*/
-         memaddr =__get_free_pages(GFP_KERNEL, PAGE_ORDER);
-        if(!memaddr)
+        memaddr =__get_free_pages(GFP_KERNEL, PAGE_ORDER);
+        memaddr1 =__get_free_pages(GFP_KERNEL, PAGE_ORDER);
+        if((!memaddr) || (!memaddr1))
         {
                  printk("Allocate memory failure!/n");
                  return -1;
@@ -228,10 +284,15 @@ static int __init init(void)
         else
         {
                  SetPageReserved(virt_to_page(memaddr));
+				 SetPageReserved(virt_to_page(memaddr1));
                  memsize = PAGES_NUMBER * PAGE_SIZE;
                  free_size = memsize;
+                 free_size1 = memsize;
+                 currentfile = 0;			// 先写第一个文件
                  memset((void *)memaddr,0,memsize);
-                 printk("Allocate memory success!. The phy mem addr=%08lx, size=%lu\n", __pa(memaddr), memsize);
+                 memset((void *)memaddr1,0,memsize);
+                 printk("Allocate memory0 success!. The phy mem0 addr=%08lx, size=%lu\n", __pa(memaddr), memsize);
+                 printk("Allocate memory1 success!. The phy mem1 addr=%08lx, size=%lu\n", __pa(memaddr1), memsize);
         }
         
         nf_init();
