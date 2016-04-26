@@ -61,13 +61,13 @@ static struct nf_hook_ops nfho_in;
 static struct nf_hook_ops nfho_out;
 
 static int proc_show_meminfo(struct seq_file *m, void *v) {
-	printk("proc_show_meminfo called...\n");
+	//printk("proc_show_meminfo called...\n");
 	seq_printf(m, "%08lx %lu %08lx\n",__pa(memaddr), memsize,__pa(memaddr1));
 	return 0;
 }
 
 static int proc_open_meminfo(struct inode *inode, struct  file *file) {
-	printk("proc_open_meminfo called...\n");
+	//printk("proc_open_meminfo called...\n");
 	return single_open(file, proc_show_meminfo, NULL);
 }
 
@@ -91,7 +91,7 @@ int proc_mmap(struct file *file, struct vm_area_struct *vma)
         return -1;
     }
     vma->vm_flags |= (VM_DONTDUMP|VM_DONTEXPAND);
-    printk("remap_pfn_rang page:[%lu] ok.\n", page);
+    //printk("remap_pfn_rang page:[%lu] ok.\n", page);
     return 0;
 }
 int proc_mmap1(struct file *file, struct vm_area_struct *vma)
@@ -106,11 +106,11 @@ int proc_mmap1(struct file *file, struct vm_area_struct *vma)
         return -1;
     }
     vma->vm_flags |= (VM_DONTDUMP|VM_DONTEXPAND);
-    printk("remap_pfn_rang page:[%lu] ok.\n", page);
+    //printk("remap_pfn_rang page:[%lu] ok.\n", page);
     return 0;
 }
 static int proc_show_dumpinfo(struct seq_file *m, void *v) {
-	printk("proc_show_dumpinfo called...\n");
+	//printk("proc_show_dumpinfo called...\n");
 	seq_printf(m, "%d %d\n",currentfile,currentfile?count1:count);
 	return 0;
 }
@@ -187,7 +187,7 @@ int CopyToSharedMem(struct sk_buff *skb)
 						offset += DataLen;
 						free_size -= DataLen;
 						count++;
-						printk("Packet[%d] Copy to shared memory0,DataLen%d ,memory0 left :%d: \n",count,DataLen,free_size);
+						printk("Packet[%d] Copy to shared memory[0],DataLen%d ,memory left :%d: \n",count,DataLen,free_size);
 						return 0;
 				}
 		}
@@ -207,7 +207,7 @@ file1:			//write file 1
 			offset1 += DataLen;
 			free_size1 -= DataLen;
 			count1++;
-			printk("Packet[%d] Copy to shared memory,DataLen%d ,memory left :%d: \n",count1,DataLen,free_size1);
+			printk("Packet[%d] Copy to shared memory[1],DataLen%d ,memory left :%d: \n",count1,DataLen,free_size1);
 		}
 		return 0;
 }
