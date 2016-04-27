@@ -39,6 +39,4 @@ struct __pkthdr
 	_Int32		iLength;
 }pcaprec_hdr_t, *ppcaprec_hdr_t;
 
-#pragma pack( pop)
-
 #endif
