@@ -31,7 +31,7 @@ typedef struct __file_header
 }pcap_hdr_t;
 
 // 数据包头
-struct __pkthdr
+typedef struct __pkthdr
 {
 	_Int32		iTimeSecond;
 	_Int32		iTimeSS;

@@ -10,8 +10,22 @@
 #include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
-//#include <sys/time.h>
 #include <time.h>
+#include <getopt.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <assert.h>
+#include <stdbool.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+#include <poll.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/time.h>
 #include "pcap.h"
 
 #define PCAP_FILE_COUNT 2
@@ -185,18 +199,18 @@ int InitPcapFile()
 
 void DumpPcapFile()
 {
-		struct ethhdr eth;
-		struct iphdr iph;
-		INT32	i;
+		struct ethhdr* eth;
+		struct iphdr* iph;
+		INT32 i;
 		struct timezone tz;
 	    struct timeval tv;
 	    pcaprec_hdr_t rheader;
 	    UINT32 packetlen;
 	    char *pmem;
 	    
+	    /*
 	    if(PcapFile[0]->free < ring->offset)
 	    {
-	    	KksDebug("1111111111\n");
 	    	CloseFileObject(PcapFile[0]);
 	    	PcapFile[0] = PcapFile[1];
 	    	PcapFile[1] = CreateNewFileObject();
@@ -204,18 +218,22 @@ void DumpPcapFile()
 	
 	    ring->offset = 0;
 	    pmem = (char *)((char *)ring + sizeof(MEMBLOCK));
-	    for(i = 0; i < ring->count; i++ )
+	    * */
+	    if(currentfile)
+			pmem = (char *)map_addr1;
+		else
+			pmem = (char *)map_addr0;
+	    for(i = 0; i < count; i++ )
 	    {
-			//eth = (PETH_HEAD)(ring->mem + ring->offset);
 	
-	    	eth = (PETH_HEAD)(pmem + ring->offset);
-			iph = (PIP_HEADER)((char *)eth + 14);
-			packetlen = htons(iph->TotalLength) + 14;
+	    	eth = (struct ethhdr*)(pmem );
+			iph = (struct iphdr*)((char *)eth + 14);
+			packetlen = htons(iph->tot_len) + 14;
 			gettimeofday(&tv,&tz);
-			rheader.ts_sec = tv.tv_sec;
-			rheader.ts_usec = tv.tv_usec;
-			rheader.incl_len = packetlen;
-			rheader.orig_len = packetlen;
+			rheader.iTimeSecond = tv.tv_sec;
+			rheader.iTimeSS = tv.tv_usec;
+			rheader.iPLength = packetlen;
+			rheader.iLength = packetlen;
 			memcpy(PcapFile[0]->mem + PcapFile[0]->len, &rheader, sizeof(pcaprec_hdr_t));
 			PcapFile[0]->len += sizeof(pcaprec_hdr_t);
 			PcapFile[0]->free -= sizeof(pcaprec_hdr_t);
@@ -224,14 +242,14 @@ void DumpPcapFile()
 			PcapFile[0]->len += packetlen;
 			PcapFile[0]->free -= packetlen;
 	
-			ring->count --;
-			ring->offset += packetlen;
 	    }
-	
+	/*
 	    memset(ring, 0, SHARED_MEMORY_SIZE >> 1 );
 	    ring->free_size = (UINT32)((SHARED_MEMORY_SIZE >> 1) - sizeof(MEMBLOCK));
 	    ring->state = UNDEFINED;
+	    * */
 }
+
 int main(int argc, char* argv[])
 {
 
