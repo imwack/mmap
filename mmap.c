@@ -31,6 +31,7 @@
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <net/route.h>
 #include <linux/proc_fs.h>
+#include "pcap.h"
 
 /*alloc one page. 4096 bytes*/
 #define PAGE_ORDER 4

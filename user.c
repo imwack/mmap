@@ -6,12 +6,18 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include "pcap.h"
 
-unsigned long phymem_addr,phymem_addr1, phymem_size;
-char *map_addr;
+#define PCAP_FILE_COUNT 2
+
+unsigned long phymem_addr0,phymem_addr1, phymem_size;
+char *map_addr0,*map_addr1;
 char s[4096];
-int fd,map_fd,i,len,count,currentfile;
+int fd,map_fd0,map_fd1,i,len,count,currentfile;
 int StartDump = 0;
+int suffix = 0;
+
+PFILE_OBJECT PcapFile[PCAP_FILE_COUNT];
 
 int GetMemInfo()
 {
@@ -45,6 +51,135 @@ int GetDumpInfo()
         return 0;
 }
 
+int  InitMmapFile()
+{
+	//mmap file 0
+			map_fd0= open("/proc/memshare/mmap",  O_RDWR|O_SYNC);
+			if(map_fd0 < 0)
+			{
+					printf("cannot open file /proc/memshare/mmap\n");
+					return -1;
+			}
+			 map_addr0 = mmap(NULL, phymem_size, PROT_READ|PROT_WRITE, MAP_SHARED, map_fd0, phymem_addr0);
+			 if(map_addr0 ==MAP_FAILED)
+			 {
+					perror("mmap");
+					close(map_fd0);
+					return -1;
+			 }
+	//mmap file 1
+			map_fd1 = open("/proc/memshare/mmap1",  O_RDWR|O_SYNC);
+			if(map_fd1 < 0)
+			{
+					printf("cannot open file /proc/memshare/mmap1\n");
+					return -1;
+			}
+			 map_addr1 = mmap(NULL, phymem_size, PROT_READ|PROT_WRITE, MAP_SHARED, map_fd1, phymem_addr1);
+			 if(map_addr1 ==MAP_FAILED)
+			 {
+					perror("mmap");
+					close(map_fd);
+					return -1;
+			 }
+			 return 0;
+}
+
+void UninitMmapFile()
+{
+			int ret ;
+			ret = munmap(map_addr0, phymem_size);
+			if(ret)
+			{
+					printf("munmap failed:%d \n",ret);
+			 }
+			 ret = munmap(map_addr1, phymem_size);
+			if(ret)
+			{
+					printf("munmap failed:%d \n",ret);
+			 }
+			close(map_fd0);
+			close(map_fd1);
+}
+
+PFILE_OBJECT CreateNewFileObject()
+{
+	char FileName[256];
+	time_t nowtime;
+	struct tm *ltime;
+    pcap_hdr_t* pheader;
+	time(&nowtime);
+	ltime=localtime(&nowtime);
+
+	PFILE_OBJECT new = malloc(sizeof(FILE_OBJECT));
+	if(!new)
+	{
+		perror("malloc");
+		return NULL;
+	}
+	suffix ++;
+	sprintf(FileName, "%d%d%d%d%d%d-%d.pcap",1900+ltime->tm_year,
+	       1+ltime->tm_mon,ltime->tm_mday,ltime->tm_hour,ltime->tm_min,ltime->tm_sec,suffix);
+
+	printf("finame: %s\n",FileName);
+	new->fd = open(FileName,O_CREAT|O_RDWR,S_IRUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);//fopen(FileName, "w+");
+	if(new->fd < 0)
+	{
+		printf("Create New FileObject failed");
+		free(new);
+		return NULL;
+	}
+    new->free = FILE_MAX_SIZE;
+	new->len = 0;
+
+	ftruncate(new->fd , FILE_MAX_SIZE);
+
+	new->mem = (void *)mmap(0, FILE_MAX_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED,new->fd,0);
+	if (new->mem == MAP_FAILED)
+	{
+		perror("mmap");
+		free(new);
+		close(new->fd);
+		return NULL;
+	}else
+	{
+		//close(new->fd);
+	//	perror("mmap.");
+	}
+	printf("mem:%p\n",new->mem);
+	//memset(new->mem, 0 ,FILE_MAX_SIZE);
+
+    pheader=(pcap_hdr_t*)malloc(sizeof(pcap_hdr_t));
+    pheader->magic_number=2712847316;
+    pheader->version_major=2;
+    pheader->version_minor=4;
+    pheader->thiszone=0;
+    pheader->sigfigs=0;
+    pheader->snaplen=65535;
+    pheader->network=1;
+
+    memcpy(new->mem, (char *)pheader, sizeof(pcap_hdr_t));
+    new->len += sizeof(pcap_hdr_t);
+    new->free -= sizeof(pcap_hdr_t);
+    free(pheader);
+	return new;
+}
+
+int InitPcapFile()
+{
+		int i;
+		for(i = 0; i < PCAP_FILE_COUNT; i++)
+		{
+			PcapFile[i] = CreateNewFileObject();
+			if(!PcapFile[i])
+			{
+				for(j = 0; j < i;j++)
+					free(PcapFile[j]);
+				printf("CreateNewFileObject failed\n");
+				return -1;
+			}
+		}
+		return 0;
+}
 int main(int argc, char* argv[])
 {
 
@@ -55,11 +190,25 @@ int main(int argc, char* argv[])
 			printf("Get Memory info failed ,exit...\n");
 			return -1;
 		}
-
+		
+		ret = InitPcapFile();
+		if(ret !=0)
+        {
+			printf("Init Pcap File failed ,exit...\n");
+			return -1;
+		}
+		
+		ret = InitMmapFile();
+		if(ret !=0)
+        {
+			printf("Init Pcap File failed ,exit...\n");
+			return -1;
+		}
+		
 		while(1)
 		{
 				sleep(1);		//delay 1s
-				ret = GetDumpInfo();
+				ret = GetDumpInfo();	//get current file and pcap number
 				if(ret !=0)
 				{
 					printf("Get Dump info failed ,exit...\n");
@@ -68,35 +217,15 @@ int main(int argc, char* argv[])
 				 /*memory map*/
 				if(currentfile ==0)
 				{
-						map_fd = open("/proc/memshare/mmap",  O_RDWR|O_SYNC);
-						if(map_fd < 0)
-						{
-								printf("cannot open file /proc/memshare/mmap\n");
-								return -1;
-						}
-						 map_addr = mmap(NULL, phymem_size, PROT_READ|PROT_WRITE, MAP_SHARED, map_fd, phymem_addr);
-						 if(map_addr ==MAP_FAILED)
-						 {
-								perror("mmap");
-								close(map_fd);
-								return -1;
-						 }
+						//noting to be done...
 				 }
 				 else{
-						StartDump = 1;		//After file0 been writen over, start dump
-						map_fd = open("/proc/memshare/mmap1",  O_RDWR|O_SYNC);
-						if(map_fd < 0)
+						if(!StartDump)
 						{
-								printf("cannot open file /proc/memshare/mmap1\n");
-								return -1;
+							StartDump = 1;		//After file0 been writen over, start dump
+							printf("Start dump pcap...\n");
 						}
-						 map_addr = mmap(NULL, phymem_size, PROT_READ|PROT_WRITE, MAP_SHARED, map_fd, phymem_addr1);
-						 if(map_addr ==MAP_FAILED)
-						 {
-								perror("mmap");
-								close(map_fd);
-								return -1;
-						 }
+					
 				}
 				
 				if(StartDump)		//start dump pcap  dump current opposite file
@@ -106,13 +235,9 @@ int main(int argc, char* argv[])
 						memcpy(s,map_addr,4096);
 						printf("str is :%s \n",s);
 				}
-				int ret = munmap(map_addr, phymem_size);
-				if(ret)
-				{
-						printf("munmap failed:%d \n",ret);
-				 }
-				close(map_fd);
+
 		}
+		UninitMmapFile();
         return 0;
 
 }
