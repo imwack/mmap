@@ -33,15 +33,15 @@
 #include <linux/proc_fs.h>
 #include "pcap.h"
 
-/*alloc one page. 4096 bytes*/
+/*alloc 4 page. 4*4096 bytes*/
 #define PAGE_ORDER 4
 /*this value can get from PAGE_ORDER*/
 #define PAGES_NUMBER 4
 static int DUMP_PCAP = 1;
 
 struct proc_dir_entry *proc_memshare_dir ;
-unsigned long memaddr = 0;
-unsigned long memaddr1 = 0;
+unsigned long memaddr ;
+unsigned long memaddr1;
 unsigned long memsize= 0;
 
 int currentfile = 0;
@@ -175,7 +175,7 @@ int CopyToSharedMem(struct sk_buff *skb)
 		{	
 				if(free_size < DataLen)
 				{
-						printk("File0 do not have enough memory...\n");
+						printk("File0 do not have enough memory...DataLen :%d\n",DataLen);
 						currentfile = 1;
 						offset1 = 0;
 						count1 = 0;
@@ -196,7 +196,7 @@ int CopyToSharedMem(struct sk_buff *skb)
 file1:			//write file 1
 		if(free_size1 < DataLen)
 		{
-			printk("File1do not have enough memory...\n");
+			printk("File1 do not have enough memory...DataLen :%d\n",DataLen);
 			currentfile = 0;
 			offset = 0;
 			count = 0;
@@ -302,10 +302,12 @@ static int __init init(void)
 
 static void __exit fini(void)
 {
-         //printk("The content written by user is: %s\n", (unsigned char *) memaddr);
-         ClearPageReserved(virt_to_page(memaddr));
-         free_pages(memaddr, PAGE_ORDER);
-         kks_proc_uninit();
+		//printk("The content written by user is: %s\n", (unsigned char *) memaddr);
+		ClearPageReserved(virt_to_page(memaddr));
+		free_pages(memaddr, PAGE_ORDER);
+		ClearPageReserved(virt_to_page(memaddr1));
+		free_pages(memaddr1, PAGE_ORDER);
+		kks_proc_uninit();
 		nf_uninit();
         return;
 }

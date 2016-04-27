@@ -29,13 +29,13 @@
 #include "pcap.h"
 
 #define PCAP_FILE_COUNT 2
-#define FILE_MAX_SIZE 16*1024
+#define FILE_MAX_SIZE 30*1024				//30k
 
 unsigned long phymem_addr0,phymem_addr1, phymem_size;
 char *map_addr0,*map_addr1;
 char s[4096];
-int fd,map_fd0,map_fd1,i,len,last_count,current_count,last_file,current_file;
-int StartDump = 0;
+int fd,map_fd0,map_fd1,i,len,last_count,current_count,last_file=1,current_file=0;
+int StartDump = 0, first =1;
 int suffix = 0;
 
 PFILE_OBJECT PcapFile[PCAP_FILE_COUNT];
@@ -67,9 +67,33 @@ int GetDumpInfo()
                 return -1;
         }
         read(fd, s, sizeof(s));
-        sscanf(s, "%d %d %d %d\n",&last_file, &last_count,&current_file, &current_count);
-        close(fd);
-        printf("last file :%d ,last count: %d current file :%d ,packet count: %d\n",last_file,last_count ,current_file, current_count);
+        if(first)
+        {
+			sscanf(s, "%d %d %d %d\n",&last_file,&last_count,&current_file,&current_count);
+			close(fd);
+			printf(" First: last file :%d ,last count: %d current file :%d ,packet count: %d\n",last_file,last_count ,current_file, current_count);
+			if(current_file)		//first time to file1
+			{	
+				first = 0;
+				StartDump =1;
+				printf(" First time to file1: last file :%d ,last count: %d current file :%d ,packet count: %d\n",last_file,last_count ,current_file, current_count);
+			}
+			return 0;
+		}
+		else
+		{
+			sscanf(s, "%d %d %d %d\n",&last_file,&last_count,&file,&c);
+			close(fd);
+			if(file !=current_file)		//file changes
+			{
+				last_file = current_file;
+				current_file  = file;
+				last_count = current_count;
+				current_count = c;
+				StartDump =1;
+				printf(" File Chanegs: last file :%d ,last count: %d current file :%d ,packet count: %d\n",last_file,last_count ,current_file, current_count);
+			}
+		}
         return 0;
 }
 
@@ -214,7 +238,7 @@ INT32 CloseFileObject(PFILE_OBJECT obj)
 	return 0;
 }
 
-void DumpPcapFile(int current_file )
+void DumpPcapFile(int dump_file )
 {
 		struct ethhdr* eth;
 		struct iphdr* iph;
@@ -226,7 +250,7 @@ void DumpPcapFile(int current_file )
 	    char *pmem;
 	    int c = last_count;
 
-	    if(current_file)	//file 1 
+	    if(dump_file)	//file 1 
 	    {
 			pmem = (char *)map_addr1;
 		}
@@ -235,9 +259,9 @@ void DumpPcapFile(int current_file )
 			pmem = (char *)map_addr0;
 		}
 		
-	    for(i = 0; i < c; i++ )
+	    for(i = 0; i <= c; i++ )
 	    {
-			printf("Dump file[%d], PCAP[%d/%d]...\n",current_file,i,c);
+			printf("Dump file[%d], PCAP[%d/%d]...\n",dump_file,i,c);
 	    	eth = (struct ethhdr*)(pmem );
 			iph = (struct iphdr*)((char *)eth + 14);
 			packetlen = htons(iph->tot_len) + 14;
@@ -264,11 +288,7 @@ void DumpPcapFile(int current_file )
 			PcapFile[0]->free -= packetlen;
 	
 	    }
-	/*
-	    memset(ring, 0, SHARED_MEMORY_SIZE >> 1 );
-	    ring->free_size = (UINT32)((SHARED_MEMORY_SIZE >> 1) - sizeof(MEMBLOCK));
-	    ring->state = UNDEFINED;
-	    * */
+	    StartDump = 0;	//Current file dump over.Stop dump current file
 }
 
 int main(int argc, char* argv[])
@@ -298,7 +318,7 @@ int main(int argc, char* argv[])
 		
 		while(1)
 		{
-				sleep(1);		//delay 1s
+		//		sleep(1);		//delay 1s
 				ret = GetDumpInfo();	//get current file and pcap number
 				if(ret !=0)
 				{
@@ -306,23 +326,10 @@ int main(int argc, char* argv[])
 					return -1;
 				}
 				 /*memory map*/
-				if(current_file ==0)
+				if(StartDump)		// when to start dump file ?  when file changes
 				{
-						//noting to be done...
-						if(StartDump)
-						{
-								DumpPcapFile(current_file);
-						}
-				 }
-				 else{
-						if(!StartDump)
-						{
-							StartDump = 1;		//After file0 been writen over, start dump
-							printf("Start dump pcap...\n");
-						}
-						DumpPcapFile(current_file);
+								DumpPcapFile(last_file);
 				}
-				
 		}
 		UninitMmapFile();
         return 0;
