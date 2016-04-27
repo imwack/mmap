@@ -1085,6 +1085,7 @@ deps_/home/x240/code/mmap/mmap.o := \
   include/uapi/linux/netfilter_ipv4/ip_tables.h \
   include/linux/netfilter/x_tables.h \
   include/uapi/linux/netfilter/x_tables.h \
+  /home/x240/code/mmap/pcap.h \
 
 /home/x240/code/mmap/mmap.o: $(deps_/home/x240/code/mmap/mmap.o)
 

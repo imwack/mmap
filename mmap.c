@@ -112,7 +112,7 @@ int proc_mmap1(struct file *file, struct vm_area_struct *vma)
 }
 static int proc_show_dumpinfo(struct seq_file *m, void *v) {
 	//printk("proc_show_dumpinfo called...\n");
-	seq_printf(m, "%d %d\n",currentfile,currentfile?count1:count);
+	seq_printf(m, "%d %d %d %d\n",(currentfile?0:1),(currentfile?count:count1),currentfile,(currentfile?count1:count));		//输出当前文件和数量
 	return 0;
 }
 static size_t proc_dumpinfo_open(struct inode *inode, struct  file *file) 

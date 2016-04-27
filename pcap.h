@@ -8,7 +8,6 @@ typedef char Byte;
 typedef unsigned int        UINT32, *PUINT32, UINT, *PUINT;
 typedef signed int          INT32, *PINT32, INT, *PINT;
 
-#define FILE_MAX_SIZE	32*1024 	//
 
 typedef struct _FILE_OBJECT
 {

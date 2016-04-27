@@ -29,11 +29,12 @@
 #include "pcap.h"
 
 #define PCAP_FILE_COUNT 2
+#define FILE_MAX_SIZE 16*1024
 
 unsigned long phymem_addr0,phymem_addr1, phymem_size;
 char *map_addr0,*map_addr1;
 char s[4096];
-int fd,map_fd0,map_fd1,i,len,count,currentfile;
+int fd,map_fd0,map_fd1,i,len,last_count,current_count,last_file,current_file;
 int StartDump = 0;
 int suffix = 0;
 
@@ -58,6 +59,7 @@ int GetMemInfo()
 int GetDumpInfo()
 {
 	/*get dump info*/
+		int file,c;
 		fd = open("/proc/memshare/dump_info", O_RDONLY);
         if(fd < 0)
         {
@@ -65,9 +67,9 @@ int GetDumpInfo()
                 return -1;
         }
         read(fd, s, sizeof(s));
-        sscanf(s, "%d %d\n",&currentfile, &count);
+        sscanf(s, "%d %d %d %d\n",&last_file, &last_count,&current_file, &current_count);
         close(fd);
-        printf("current file :%d ,packet count: %d\n", currentfile, count);
+        printf("last file :%d ,last count: %d current file :%d ,packet count: %d\n",last_file,last_count ,current_file, current_count);
         return 0;
 }
 
@@ -197,7 +199,22 @@ int InitPcapFile()
 		return 0;
 }
 
-void DumpPcapFile()
+INT32 CloseFileObject(PFILE_OBJECT obj)
+{
+	if(obj)
+	{
+		ftruncate(obj->fd , obj->len);
+		msync(obj->mem, FILE_MAX_SIZE, MS_ASYNC);
+		munmap(obj->mem, FILE_MAX_SIZE);
+		if(obj->fd)
+			close(obj->fd);
+		free(obj);
+		printf("close file object\n");
+	}
+	return 0;
+}
+
+void DumpPcapFile(int current_file )
 {
 		struct ethhdr* eth;
 		struct iphdr* iph;
@@ -207,25 +224,20 @@ void DumpPcapFile()
 	    pcaprec_hdr_t rheader;
 	    UINT32 packetlen;
 	    char *pmem;
-	    
-	    /*
-	    if(PcapFile[0]->free < ring->offset)
+	    int c = last_count;
+
+	    if(current_file)	//file 1 
 	    {
-	    	CloseFileObject(PcapFile[0]);
-	    	PcapFile[0] = PcapFile[1];
-	    	PcapFile[1] = CreateNewFileObject();
-	    }
-	
-	    ring->offset = 0;
-	    pmem = (char *)((char *)ring + sizeof(MEMBLOCK));
-	    * */
-	    if(currentfile)
 			pmem = (char *)map_addr1;
-		else
+		}
+		else  		//file 0
+		{
 			pmem = (char *)map_addr0;
-	    for(i = 0; i < count; i++ )
+		}
+		
+	    for(i = 0; i < c; i++ )
 	    {
-	
+			printf("Dump file[%d], PCAP[%d/%d]...\n",current_file,i,c);
 	    	eth = (struct ethhdr*)(pmem );
 			iph = (struct iphdr*)((char *)eth + 14);
 			packetlen = htons(iph->tot_len) + 14;
@@ -234,6 +246,15 @@ void DumpPcapFile()
 			rheader.iTimeSS = tv.tv_usec;
 			rheader.iPLength = packetlen;
 			rheader.iLength = packetlen;
+			
+			if(PcapFile[0]->free < sizeof(pcaprec_hdr_t)+packetlen )
+			{
+				printf("Pcap File donot have enough memory,Creating new file\n");
+				CloseFileObject(PcapFile[0]);
+				PcapFile[0] = PcapFile[1];
+				PcapFile[1] = CreateNewFileObject();
+			}
+			
 			memcpy(PcapFile[0]->mem + PcapFile[0]->len, &rheader, sizeof(pcaprec_hdr_t));
 			PcapFile[0]->len += sizeof(pcaprec_hdr_t);
 			PcapFile[0]->free -= sizeof(pcaprec_hdr_t);
@@ -285,12 +306,12 @@ int main(int argc, char* argv[])
 					return -1;
 				}
 				 /*memory map*/
-				if(currentfile ==0)
+				if(current_file ==0)
 				{
 						//noting to be done...
 						if(StartDump)
 						{
-								DumpPcapFile();
+								DumpPcapFile(current_file);
 						}
 				 }
 				 else{
@@ -299,8 +320,7 @@ int main(int argc, char* argv[])
 							StartDump = 1;		//After file0 been writen over, start dump
 							printf("Start dump pcap...\n");
 						}
-						DumpPcapFile();
-					
+						DumpPcapFile(current_file);
 				}
 				
 		}
