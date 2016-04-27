@@ -59,40 +59,27 @@ int GetMemInfo()
 int GetDumpInfo()
 {
 	/*get dump info*/
-		int file,c;
+		int f,c;
 		fd = open("/proc/memshare/dump_info", O_RDONLY);
         if(fd < 0)
         {
                 printf("cannot open file /proc/memshare/dump_info\n");
                 return -1;
         }
+        
         read(fd, s, sizeof(s));
-        if(first)
-        {
-			sscanf(s, "%d %d %d %d\n",&last_file,&last_count,&current_file,&current_count);
-			close(fd);
-			printf(" First: last file :%d ,last count: %d current file :%d ,packet count: %d\n",last_file,last_count ,current_file, current_count);
-			if(current_file)		//first time to file1
-			{	
-				first = 0;
-				StartDump =1;
-				printf(" First time to file1: last file :%d ,last count: %d current file :%d ,packet count: %d\n",last_file,last_count ,current_file, current_count);
-			}
-			return 0;
-		}
-		else
+		sscanf(s, "%d %d %d %d\n",&last_file,&last_count,&f,&c);
+		close(fd);
+	//	printf("last file :%d ,last count: %d current file :%d ,packet count: %d\n",last_file,last_count ,f, c);
+		if(current_file == last_file)		//file changed
 		{
-			sscanf(s, "%d %d %d %d\n",&last_file,&last_count,&file,&c);
-			close(fd);
-			if(file !=current_file)		//file changes
-			{
-				last_file = current_file;
-				current_file  = file;
-				last_count = current_count;
-				current_count = c;
-				StartDump =1;
-				printf(" File Chanegs: last file :%d ,last count: %d current file :%d ,packet count: %d\n",last_file,last_count ,current_file, current_count);
-			}
+			printf("file changed start dump...File[%d],Total_Packet[%d]\n",last_file,last_count);
+			StartDump =1;
+			current_file = f;
+			current_count =c;
+		}
+		else{			//not changed
+			current_count = c;
 		}
         return 0;
 }
