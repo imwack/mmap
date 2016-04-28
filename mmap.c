@@ -35,6 +35,7 @@
 
 /*alloc 4 page. 4*4096 bytes*/
 #define PAGE_ORDER 4
+#define SHARED_MEMORY_SIZE	16*1024		//128k
 /*this value can get from PAGE_ORDER*/
 #define PAGES_NUMBER 4
 static int DUMP_PCAP = 1;
@@ -45,8 +46,8 @@ unsigned long memaddr1;
 unsigned long memsize= 0;
 
 int currentfile = 0;
-int offset = 0;
-int offset1 = 0;
+int offset ;
+int offset1 ;
 int free_size;
 int free_size1;
 int count = 0;
@@ -67,14 +68,14 @@ static int proc_show_meminfo(struct seq_file *m, void *v) {
 	return 0;
 }
 
-static int proc_open_meminfo(struct inode *inode, struct  file *file) {
+static int proc_meminfo_open(struct inode *inode, struct  file *file) {
 	//printk("proc_open_meminfo called...\n");
 	return single_open(file, proc_show_meminfo, NULL);
 }
 
 static const struct file_operations read_phymem_info_fops = { 
     .owner = THIS_MODULE, 
-    .open = proc_open_meminfo, 
+    .open = proc_meminfo_open, 
     .read = seq_read, 
     .llseek = seq_lseek, 
     .release = seq_release 
@@ -115,7 +116,7 @@ static int proc_show_dumpinfo(struct seq_file *m, void *v) {
 	seq_printf(m, "%d %d %d %d\n",(currentfile?0:1),(currentfile?count:count1),currentfile,(currentfile?count1:count));		//输出当前文件和数量
 	return 0;
 }
-static size_t proc_dumpinfo_open(struct inode *inode, struct  file *file) 
+static int proc_dumpinfo_open(struct inode *inode, struct  file *file) 
 {
 		//printk("proc_mmap_open called...\n");
 		return single_open(file, proc_show_dumpinfo, NULL);
@@ -171,6 +172,7 @@ int CopyToSharedMem(struct sk_buff *skb)
 		ih = ip_hdr(skb);
 		data = (char *)((char *)ih - ETH_HLEN);
 		DataLen = htons(ih->tot_len) + ETH_HLEN;
+		
 		if(currentfile == 0)		//write file 0
 		{	
 				if(free_size < DataLen)
@@ -180,6 +182,7 @@ int CopyToSharedMem(struct sk_buff *skb)
 						offset1 = 0;
 						count1 = 0;
 						free_size1 = memsize;
+						memset((void *)memaddr1,0,memsize);
 						goto file1;
 				}
 				else
@@ -200,6 +203,7 @@ file1:			//write file 1
 			currentfile = 0;
 			offset = 0;
 			count = 0;
+    		memset((void *)memaddr,0,memsize);		//but what if user space is reading this memory? 
 			free_size = memsize;
 		}
 		else
@@ -275,8 +279,10 @@ static int __init init(void)
 		}
 
         /*alloc one page*/
-        memaddr =__get_free_pages(GFP_KERNEL, PAGE_ORDER);
-        memaddr1 =__get_free_pages(GFP_KERNEL, PAGE_ORDER);
+        //memaddr =__get_free_pages(GFP_KERNEL, PAGE_ORDER);
+        //memaddr1 =__get_free_pages(GFP_KERNEL, PAGE_ORDER);
+        memaddr = kmalloc(SHARED_MEMORY_SIZE ,GFP_KERNEL);
+        memaddr1 = kmalloc(SHARED_MEMORY_SIZE ,GFP_KERNEL);
         if((!memaddr) || (!memaddr1))
         {
                  printk("Allocate memory failure!/n");
@@ -284,11 +290,14 @@ static int __init init(void)
         }
         else
         {
-                 SetPageReserved(virt_to_page(memaddr));
-				 SetPageReserved(virt_to_page(memaddr1));
-                 memsize = PAGES_NUMBER * PAGE_SIZE;
+                 //SetPageReserved(virt_to_page(memaddr));
+				 //SetPageReserved(virt_to_page(memaddr1));
+                 //memsize = PAGES_NUMBER * PAGE_SIZE;
+                 memsize = SHARED_MEMORY_SIZE;
                  free_size = memsize;
                  free_size1 = memsize;
+                 offset = 0;
+                 offset1 = 0;
                  currentfile = 0;			// 先写第一个文件
                  memset((void *)memaddr,0,memsize);
                  memset((void *)memaddr1,0,memsize);
@@ -303,12 +312,16 @@ static int __init init(void)
 static void __exit fini(void)
 {
 		//printk("The content written by user is: %s\n", (unsigned char *) memaddr);
+		kks_proc_uninit();
+		nf_uninit();
+		/*
 		ClearPageReserved(virt_to_page(memaddr));
 		free_pages(memaddr, PAGE_ORDER);
 		ClearPageReserved(virt_to_page(memaddr1));
 		free_pages(memaddr1, PAGE_ORDER);
-		kks_proc_uninit();
-		nf_uninit();
+		* */
+		kfree((char *)memaddr);
+		kfree((char *)memaddr1);
         return;
 }
 module_init(init);

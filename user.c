@@ -29,7 +29,7 @@
 #include "pcap.h"
 
 #define PCAP_FILE_COUNT 2
-#define FILE_MAX_SIZE 30*1024				//30k
+#define FILE_MAX_SIZE 1024*1024				//1M
 
 unsigned long phymem_addr0,phymem_addr1, phymem_size;
 char *map_addr0,*map_addr1;
@@ -226,7 +226,7 @@ INT32 CloseFileObject(PFILE_OBJECT obj)
 	return 0;
 }
 
-void DumpPcapFile(int dump_file )
+void DumpPcapFile(int dump_file,int memsize )
 {
 		struct ethhdr* eth;
 		struct iphdr* iph;
@@ -237,7 +237,8 @@ void DumpPcapFile(int dump_file )
 	    UINT32 packetlen;
 	    char *pmem;
 	    int c = last_count;
-
+		unsigned int offset = 0;
+		
 	    if(dump_file)	//file 1 
 	    {
 			pmem = (char *)map_addr1;
@@ -249,8 +250,13 @@ void DumpPcapFile(int dump_file )
 		
 	    for(i = 0; i <= c; i++ )
 	    {
-			printf("Dump file[%d], PCAP[%d/%d]...\n",dump_file,i,c);
-	    	eth = (struct ethhdr*)(pmem );
+			printf("Dump file[%d], PCAP[%d/%d]...offset:%d\n",dump_file,i,c,offset);
+			if(offset> memsize){
+				printf("[Warning] ! Offset over memsize! Exit...\n");
+				break;
+			}
+				
+	    	eth = (struct ethhdr*)(pmem +offset);
 			iph = (struct iphdr*)((char *)eth + 14);
 			packetlen = htons(iph->tot_len) + 14;
 			gettimeofday(&tv,&tz);
@@ -261,7 +267,7 @@ void DumpPcapFile(int dump_file )
 			
 			if(PcapFile[0]->free < sizeof(pcaprec_hdr_t)+packetlen )
 			{
-				printf("Pcap File donot have enough memory,Creating new file\n");
+			//	printf("Pcap File donot have enough memory,Creating new file\n");
 				CloseFileObject(PcapFile[0]);
 				PcapFile[0] = PcapFile[1];
 				PcapFile[1] = CreateNewFileObject();
@@ -270,12 +276,14 @@ void DumpPcapFile(int dump_file )
 			memcpy(PcapFile[0]->mem + PcapFile[0]->len, &rheader, sizeof(pcaprec_hdr_t));
 			PcapFile[0]->len += sizeof(pcaprec_hdr_t);
 			PcapFile[0]->free -= sizeof(pcaprec_hdr_t);
-	
+			
 			memcpy(PcapFile[0]->mem + PcapFile[0]->len, (char *)(eth), packetlen);
 			PcapFile[0]->len += packetlen;
 			PcapFile[0]->free -= packetlen;
+			offset += packetlen;
 	
 	    }
+		printf("Dump file[%d], PCAP[%d] finished...\n",dump_file,c);
 	    StartDump = 0;	//Current file dump over.Stop dump current file
 }
 
@@ -306,7 +314,7 @@ int main(int argc, char* argv[])
 		
 		while(1)
 		{
-		//		sleep(1);		//delay 1s
+				sleep(1);		//delay 1s	will there be some problem?
 				ret = GetDumpInfo();	//get current file and pcap number
 				if(ret !=0)
 				{
@@ -316,7 +324,7 @@ int main(int argc, char* argv[])
 				 /*memory map*/
 				if(StartDump)		// when to start dump file ?  when file changes
 				{
-								DumpPcapFile(last_file);
+								DumpPcapFile(last_file,phymem_size);
 				}
 		}
 		UninitMmapFile();
