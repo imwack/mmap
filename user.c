@@ -150,13 +150,14 @@ PFILE_OBJECT CreateNewFileObject()
 		return NULL;
 	}
 	suffix ++;
-	sprintf(FileName, "%d%d%d%d%d%d-%d.pcap",1900+ltime->tm_year,
+	sprintf(FileName, "/home/x240/code/mmap/dump/%d%d%d%d%d%d-%d.pcap",1900+ltime->tm_year,
 	       1+ltime->tm_mon,ltime->tm_mday,ltime->tm_hour,ltime->tm_min,ltime->tm_sec,suffix);
 
 	printf("finame: %s\n",FileName);
 	new->fd = open(FileName,O_CREAT|O_RDWR,S_IRUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);//fopen(FileName, "w+");
 	if(new->fd < 0)
 	{
+		perror("open");
 		printf("Create New FileObject failed");
 		free(new);
 		return NULL;
